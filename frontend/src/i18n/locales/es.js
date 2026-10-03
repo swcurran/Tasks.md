@@ -18,6 +18,7 @@ export default {
 		addTag: "Agregar etiqueta", changeColor: "Cambiar color", deleteTag: "Eliminar etiqueta", dueDate: "Fecha de vencimiento",
 		minimize: "Minimizar", expand: "Expandir", colorOption: "Color {{n}}", rename: "Clic para renombrar",
 		tagError: { duplicate: "Etiqueta duplicada" },
+		done: "Marcar como completada", undone: "Marcar como no completada",
 		close: "Cerrar"
 	},
 	bulk: {

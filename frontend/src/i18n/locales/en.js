@@ -18,6 +18,7 @@ export default {
 		addTag: "Add tag", changeColor: "Change color", deleteTag: "Delete tag", dueDate: "Due date",
 		minimize: "Minimize", expand: "Expand", colorOption: "Color {{n}}", rename: "Click to rename",
 		tagError: { duplicate: "Duplicate tag" },
+		done: "Mark done", undone: "Mark not done",
 	},
 	bulk: {
 		selected: "{{count}} card selected", selected_plural: "{{count}} cards selected",

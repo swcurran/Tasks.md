@@ -531,6 +531,14 @@ function App() {
     setCards(cards().filter((card) => !movedCardsNames.includes(card.name)));
   }
 
+  // Used by the editor, which passes its latest content since edits are saved with a delay
+  async function toggleSelectedCardDone(content) {
+    const card = selectedCard();
+    debounceChangeCardContent.clear();
+    navigate(`${basePath()}${board()}` || "/");
+    await toggleCardsDone([{ ...card, content }]);
+  }
+
   function sortCardsByCreatedFirst() {
     const newCards = structuredClone(cards());
     return newCards.sort((a, b) => {
@@ -1482,6 +1490,8 @@ function App() {
             }
             onTagColorChange={updateTagColorFromExpandedCard}
             onNameChange={handleOnSelectedCardNameChange}
+            onToggleDone={toggleSelectedCardDone}
+            isDoneView={isDoneView()}
             getNameErrorMsg={(newName) =>
               validateName(
                 newName,
