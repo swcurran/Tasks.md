@@ -99,7 +99,7 @@ Sub-directories can also be opened as their own projects. In this example, by op
 More details (and it how it looks within Obsidian) can be found [here](https://github.com/BaldissaraMatheus/Tasks.md/issues/49).
 
 ### Done cards
-Marking a card as done (from the card's options menu, or for several cards at once in selection mode) adds a `[done:YYYY-MM-DDTHH:mm:ss]` marker to it and moves its file into a hidden `.done` directory, inside a directory with the same name as its lane:
+Marking a card as done (from the card's options menu or editor, or for several cards at once in selection mode) adds a `[done:YYYY-MM-DDTHH:mm:ss]` marker to it and moves its file into a hidden `.done` directory, inside a directory with the same name as its lane:
 
 ```
 Backlog/
@@ -109,7 +109,7 @@ Sprint/
     Something something.md
 ```
 
-The "Done tasks" button opens the done view, which shows the board's done cards with the most recently done first. Marking a card as "not done" removes the marker and moves it back to its lane. Renaming or deleting a lane also renames or deletes its done cards.
+The "Done tasks" button opens the done view, which shows the board's done cards with the most recently done first. Marking a card as "not done" removes the marker and moves it back to its lane. Renaming a lane also renames the directory of its done cards. Deleting a lane keeps its done cards; they can be deleted from the done view.
 
 ## 💻 Technology stack
 With the goal of having a good mix of performance and maintainability, the application was built with [SolidJS](https://github.com/solidjs/solid) and [Koa](https://github.com/koajs/koa). It also uses [Stacks-Editor](https://github.com/StackExchange/Stacks-Editor) for text editing and [serve-static](https://github.com/expressjs/serve-static) to serve the css files as-is.

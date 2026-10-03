@@ -234,18 +234,10 @@ router.patch("/resource/:path*", updateResource);
 
 async function deleteResource(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/resources".length));
-  const isDirectory = fs.existsSync(`${TASKS_DIR}/${subPath}`)
-    && fs.lstatSync(`${TASKS_DIR}/${subPath}`).isDirectory();
   await fs.promises.rm(`${TASKS_DIR}/${subPath}`, {
     force: true,
     recursive: true,
   });
-  if (isDirectory) {
-    await fs.promises.rm(`${TASKS_DIR}/${getDoneLanePath(subPath)}`, {
-      force: true,
-      recursive: true,
-    });
-  }
   ctx.status = 204;
 }
 

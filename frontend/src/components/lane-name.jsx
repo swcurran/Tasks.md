@@ -13,7 +13,7 @@ import { IconPlusSm, IconEllipsisVertical } from '@stackoverflow/stacks-icons/ic
  * @param {Function} props.onDelete
  * @param {Function} props.onDragStart
  * @param {Function} props.onCreateNewCardBtnClick
- * @param {boolean} props.isDoneView Lanes of done cards can't be changed
+ * @param {boolean} props.isDoneView Lanes of done cards can only be emptied or deleted
  * @param {Function} props.t
  */
 export function LaneName(props) {
@@ -44,17 +44,18 @@ export function LaneName(props) {
 			onClick: props.onDeleteCards,
 			requiresConfirmation: true,
 		};
+		const deleteLaneOption = {
+			label: props.t()('laneName.deleteLane'),
+			onClick: props.onDelete,
+			requiresConfirmation: true,
+		};
 		if (props.isDoneView) {
-			return [deleteCardsOption];
+			return [deleteCardsOption, deleteLaneOption];
 		}
 		return [
 			{ label: props.t()('laneName.rename'), onClick: startRenamingLane },
 			deleteCardsOption,
-			{
-				label: props.t()('laneName.deleteLane'),
-				onClick: props.onDelete,
-				requiresConfirmation: true,
-			},
+			deleteLaneOption,
 		];
 	});
 
