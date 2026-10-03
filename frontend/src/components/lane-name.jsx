@@ -13,6 +13,7 @@ import { IconPlusSm, IconEllipsisVertical } from '@stackoverflow/stacks-icons/ic
  * @param {Function} props.onDelete
  * @param {Function} props.onDragStart
  * @param {Function} props.onCreateNewCardBtnClick
+ * @param {boolean} props.isDoneView Lanes of done cards can't be changed
  * @param {Function} props.t
  */
 export function LaneName(props) {
@@ -37,19 +38,25 @@ export function LaneName(props) {
 		setShowMenu(true);
 	}
 
-	const menuOptions = createMemo(() => [
-		{ label: props.t()('laneName.rename'), onClick: startRenamingLane },
-		{
+	const menuOptions = createMemo(() => {
+		const deleteCardsOption = {
 			label: props.t()('laneName.deleteCard'),
 			onClick: props.onDeleteCards,
 			requiresConfirmation: true,
-		},
-		{
-			label: props.t()('laneName.deleteLane'),
-			onClick: props.onDelete,
-			requiresConfirmation: true,
-		},
-	]);
+		};
+		if (props.isDoneView) {
+			return [deleteCardsOption];
+		}
+		return [
+			{ label: props.t()('laneName.rename'), onClick: startRenamingLane },
+			deleteCardsOption,
+			{
+				label: props.t()('laneName.deleteLane'),
+				onClick: props.onDelete,
+				requiresConfirmation: true,
+			},
+		];
+	});
 
 	return (
 		<>
@@ -65,14 +72,16 @@ export function LaneName(props) {
 				</div>
 			</div>
 			<div class="header-buttons">
-				<button
-					type="button"
-					title={props.t()('laneName.createCard')}
-					class="small"
-					onClick={() => props.onCreateNewCardBtnClick()}
-				>
-					<span innerHTML={IconPlusSm} />
-				</button>
+				{props.isDoneView ? null : (
+					<button
+						type="button"
+						title={props.t()('laneName.createCard')}
+						class="small"
+						onClick={() => props.onCreateNewCardBtnClick()}
+					>
+						<span innerHTML={IconPlusSm} />
+					</button>
+				)}
 				<button
 					type="button"
 					title={props.t()('laneName.showOptions')}
