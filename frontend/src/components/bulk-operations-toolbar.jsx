@@ -9,6 +9,7 @@ import { createSignal, Show, For, onMount, onCleanup, createEffect } from "solid
  * @param {Function} props.onSetDueDate - Callback for bulk set due date
  * @param {Function} props.onToggleDone - Callback for bulk mark done / not done
  * @param {boolean} props.isDoneView - Whether the selected cards are done
+ * @param {Function} props.onSetUrgent - Callback for bulk mark urgent / not urgent, receives a boolean
  * @param {Function} props.onClearSelection - Callback to clear selection
  * @param {string[]} props.tagsOptions - Available tag options (all tags in project)
  * @param {string[]} props.tagsOnSelectedCards - Tags that exist on selected cards
@@ -189,6 +190,21 @@ export function BulkOperationsToolbar(props) {
           >
             {props.t()('bulk.setDueDate')}
           </button>
+
+          <Show when={!props.isDoneView}>
+            <button
+              class="bulk-operations-toolbar__button"
+              onClick={() => props.onSetUrgent(true)}
+            >
+              {props.t()('bulk.urgent')}
+            </button>
+            <button
+              class="bulk-operations-toolbar__button"
+              onClick={() => props.onSetUrgent(false)}
+            >
+              {props.t()('bulk.notUrgent')}
+            </button>
+          </Show>
 
           <button
             class="bulk-operations-toolbar__button"

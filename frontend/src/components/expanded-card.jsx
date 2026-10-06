@@ -4,6 +4,7 @@ import {
   onMount,
   createMemo,
   onCleanup,
+  Show,
 } from "solid-js";
 import { api } from "../api";
 import { Menu } from "./menu";
@@ -15,7 +16,7 @@ import { StacksEditor } from "./Stacks-Editor/src/stacks-editor/editor";
 import { IconClear, IconScreenFull, IconScreenNormal } from "@stackoverflow/stacks-icons/icons";
 import stacksStyle from "@stackoverflow/stacks/dist/css/stacks.css?inline";
 import stacksEditorStyle from "./Stacks-Editor/src/styles/index.css?inline";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getDueDateFromContent } from "../card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getDueDateFromContent, setUrgentInContent, removeUrgentFromContent, isUrgentFromContent } from "../card-content-utils";
 
 /**
  *
@@ -59,6 +60,20 @@ function ExpandedCard(props) {
   const dueDate = createMemo(() => {
     return getDueDateFromContent(props.content);
   });
+
+  // Tracked locally since saved content reaches props.content with a delay
+  const [isUrgent, setIsUrgent] = createSignal(isUrgentFromContent(props.content));
+  createEffect(() => setIsUrgent(isUrgentFromContent(props.content)));
+
+  function toggleUrgent() {
+    const currentContent = editor()?.content ?? props.content;
+    const newContent = isUrgent()
+      ? removeUrgentFromContent(currentContent)
+      : setUrgentInContent(currentContent);
+    editor().content = newContent;
+    setIsUrgent(!isUrgent());
+    props.onContentChange(newContent);
+  }
 
   let dialogRef;
   let backdropRef;
@@ -391,6 +406,16 @@ function ExpandedCard(props) {
                 </h1>
               </div>
               <div class="dialog__toolbar-btns">
+                <Show when={!props.isDoneView}>
+                  <button
+                    type="button"
+                    class={`dialog__toolbar-btn dialog__toolbar-btn--text ${isUrgent() ? "button--urgent" : ""}`}
+                    aria-pressed={isUrgent()}
+                    onClick={toggleUrgent}
+                  >
+                    {isUrgent() ? props.t()('expandedCard.notUrgent') : props.t()('expandedCard.urgent')}
+                  </button>
+                </Show>
                 <button
                   type="button"
                   class="dialog__toolbar-btn dialog__toolbar-btn--text"

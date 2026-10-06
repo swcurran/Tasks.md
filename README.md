@@ -14,6 +14,7 @@ A self-hosted, Markdown file based task management board.
 - Can be installed as PWA.
 - Multilingual support, with locale auto-detected from browser and persisted per user;
 - Mark cards as done to move them out of the board, and browse them in a separate done view;
+- Mark cards as urgent to highlight them, and filter the board to show only urgent cards;
 
 ## Upgrade from 2.X.X to 3.X.X
 If you're running a docker container with version 2 of Tasks.md and want to upgrade it to version 3, please follow up [those instructions](/migration-guide.md) as it requires some tweeks for it to work properly.
@@ -110,6 +111,11 @@ Sprint/
 ```
 
 The "Done tasks" button opens the done view, which shows the board's done cards with the most recently done first. Marking a card as "not done" removes the marker and moves it back to its lane. Renaming a lane also renames the directory of its done cards. Deleting a lane keeps its done cards; they can be deleted from the done view.
+
+### Urgent cards
+Marking a card as urgent (from the card's options menu or editor, or for several cards at once in selection mode) adds an `[urgent]` marker to it. Urgent cards are highlighted on the board, and the "Urgent" button in the header shows how many there are and filters the board to show only urgent cards, hiding lanes without any. Marking a card as done removes its urgent marker. The `u` key toggles the focused card between urgent and not urgent (press `?` on the board for the list of keyboard shortcuts).
+
+The highlight uses the color theme's `--color-alt-1` color by default, which can be changed by setting the `--color-urgent-background` and `--color-urgent-foreground` variables in a custom stylesheet.
 
 ## 💻 Technology stack
 With the goal of having a good mix of performance and maintainability, the application was built with [SolidJS](https://github.com/solidjs/solid) and [Koa](https://github.com/koajs/koa). It also uses [Stacks-Editor](https://github.com/StackExchange/Stacks-Editor) for text editing and [serve-static](https://github.com/expressjs/serve-static) to serve the css files as-is.

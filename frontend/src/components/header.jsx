@@ -1,4 +1,6 @@
-import { createEffect, createMemo, createSignal, onMount, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { IconEllipsisVertical } from "@stackoverflow/stacks-icons/icons";
+import { clickOutside } from "../utils";
 
 /**
  *
@@ -15,12 +17,17 @@ import { createEffect, createMemo, createSignal, onMount, For, Show } from "soli
  * @param {boolean} props.selectionMode
  * @param {Function} props.onSelectionModeChange
  * @param {boolean} props.isDoneView
+ * @param {boolean} props.urgentOnly
+ * @param {number} props.urgentCount
+ * @param {Function} props.onUrgentOnlyChange
  * @param {string} props.doneViewToggleHref
  * @param {Function} props.t
  * @param {string} props.locale
  * @param {Function} props.onLocaleChange
  */
 export function Header(props) {
+  const [showMoreMenu, setShowMoreMenu] = createSignal(false);
+
   const filterSelect = createMemo(() => {
     if (!props.tagOptions.length) {
       return null;
@@ -41,6 +48,11 @@ export function Header(props) {
     );
   });
 
+  function handleNewLaneBtnClick() {
+    setShowMoreMenu(false);
+    props.onNewLaneBtnClick();
+  }
+
   return (
     <header class="app-header">
       <input
@@ -49,6 +61,20 @@ export function Header(props) {
         onInput={(e) => props.onSearchChange(e.target.value)}
         class="search-input"
       />
+      <Show when={!props.isDoneView}>
+        <button
+          type="button"
+          onClick={() => props.onUrgentOnlyChange(!props.urgentOnly)}
+          class={props.urgentOnly ? "button--urgent" : ""}
+          aria-pressed={props.urgentOnly}
+          title={props.t()('header.urgentTitle')}
+        >
+          {props.t()('header.urgent', { count: props.urgentCount })}
+        </button>
+      </Show>
+      <div class="app-header__group-item">
+        {filterSelect()}
+      </div>
       <Show when={!props.isDoneView}>
         <div class="app-header__group-item">
           <div class="app-header__group-item-label">{props.t()('header.sortBy')}:</div>
@@ -65,27 +91,6 @@ export function Header(props) {
           </select>
         </div>
       </Show>
-      <div class="app-header__group-item">
-        {filterSelect()}
-      </div>
-      <div class="app-header__group-item">
-        <div class="app-header__group-item-label">{props.t()('header.viewMode')}:</div>
-        <select onChange={props.onViewModeChange} value={props.viewMode}>
-          <option value="extended">{props.t()('header.view.extended')}</option>
-          <option value="regular">{props.t()('header.view.regular')}</option>
-          <option value="compact">{props.t()('header.view.compact')}</option>
-          <option value="tight">{props.t()('header.view.tight')}</option>
-        </select>
-      </div>
-      <Show when={!props.isDoneView}>
-        <button
-          type="button"
-          onClick={props.onNewLaneBtnClick}
-          disabled={props.selectionMode}
-        >
-          {props.t()('header.newLane')}
-        </button>
-      </Show>
       <button
         type="button"
         onClick={() => props.onSelectionModeChange?.(!props.selectionMode)}
@@ -99,12 +104,50 @@ export function Header(props) {
       >
         {props.isDoneView ? props.t()('header.showActive') : props.t()('header.showDone')}
       </button>
-      <div class="app-header__group-item">
-        <div class="app-header__group-item-label">{props.t()('header.locale')}:</div>
-        <select onChange={props.onLocaleChange} value={props.locale}>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-        </select>
+      {/* Less used options */}
+      <div
+        class="app-header__more"
+        use:clickOutside={() => setShowMoreMenu(false)}
+        onKeyDown={(e) => e.key === "Escape" && setShowMoreMenu(false)}
+      >
+        <button
+          type="button"
+          class="app-header__more-btn"
+          title={props.t()('header.moreOptions')}
+          aria-expanded={showMoreMenu()}
+          onClick={() => setShowMoreMenu(!showMoreMenu())}
+        >
+          <span innerHTML={IconEllipsisVertical} />
+        </button>
+        <Show when={showMoreMenu()}>
+          <div class="app-header__more-menu">
+            <Show when={!props.isDoneView}>
+              <button
+                type="button"
+                onClick={handleNewLaneBtnClick}
+                disabled={props.selectionMode}
+              >
+                {props.t()('header.newLane')}
+              </button>
+            </Show>
+            <label class="app-header__more-menu-item">
+              <span>{props.t()('header.viewMode')}</span>
+              <select onChange={props.onViewModeChange} value={props.viewMode}>
+                <option value="extended">{props.t()('header.view.extended')}</option>
+                <option value="regular">{props.t()('header.view.regular')}</option>
+                <option value="compact">{props.t()('header.view.compact')}</option>
+                <option value="tight">{props.t()('header.view.tight')}</option>
+              </select>
+            </label>
+            <label class="app-header__more-menu-item">
+              <span>{props.t()('header.locale')}</span>
+              <select onChange={props.onLocaleChange} value={props.locale}>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </label>
+          </div>
+        </Show>
       </div>
     </header>
   );

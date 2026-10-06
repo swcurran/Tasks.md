@@ -131,3 +131,31 @@ export function getDoneDateFromContent(content) {
   const doneDateStringMatch = (content || "").match(/\[done:(.*?)\]/);
   return doneDateStringMatch?.[1] || null;
 }
+
+/**
+ * Mark card content as urgent
+ * @param {string} content - Current card content
+ * @returns {string} Updated content with the urgent marker
+ */
+export function setUrgentInContent(content) {
+  const currentContent = removeUrgentFromContent(content);
+  return currentContent ? `[urgent]\n\n${currentContent}` : "[urgent]";
+}
+
+/**
+ * Remove the urgent marker from card content
+ * @param {string} content - Current card content
+ * @returns {string} Updated content without the urgent marker
+ */
+export function removeUrgentFromContent(content) {
+  return (content || "").replace(/\[urgent\](\n\n)?/i, "");
+}
+
+/**
+ * Check whether card content is marked as urgent
+ * @param {string} content - Card content
+ * @returns {boolean}
+ */
+export function isUrgentFromContent(content) {
+  return /\[urgent\]/i.test(content || "");
+}

@@ -99,6 +99,12 @@ export function KeyboardNavigationDialog(props) {
                       </td>
                     </tr>
                     <tr>
+                      <td class="help-dialog__key-cell">u</td>
+                      <td class="help-dialog__desc-cell">
+                        Mark focused card urgent / not urgent
+                      </td>
+                    </tr>
+                    <tr>
                       <td class="help-dialog__key-cell">d</td>
                       <td class="help-dialog__desc-cell">
                         Delete focused card (with confirmation)

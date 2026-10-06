@@ -21,7 +21,7 @@ import { makePersisted } from "@solid-primitives/storage";
 import { DragAndDrop } from "./components/drag-and-drop";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { v7 } from "uuid";
-import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, setDoneInContent, removeDoneFromContent, getDoneDateFromContent } from "./card-content-utils";
+import { addTagToContent, removeTagFromContent, setDueDateInContent, getTagsFromContent, setDoneInContent, removeDoneFromContent, getDoneDateFromContent, setUrgentInContent, removeUrgentFromContent, isUrgentFromContent } from "./card-content-utils";
 import "./stylesheets/index.css";
 import { KeyboardNavigationDialog } from "./components/keyboard-navigation-dialog";
 import { useI18n } from "./i18n";
@@ -41,6 +41,10 @@ function App() {
   const [filteredTag, setFilteredTag] = makePersisted(createSignal(null), {
     storage: localStorage,
     name: "filteredTag",
+  });
+  const [urgentOnly, setUrgentOnly] = makePersisted(createSignal(false), {
+    storage: localStorage,
+    name: "urgentOnly",
   });
   const [tagsOptions, setTagsOptions] = createSignal([]);
   const [laneBeingRenamedName, setLaneBeingRenamedName] = createSignal(null);
@@ -211,6 +215,7 @@ function App() {
           ? dueDateStringMatch[1]
           : "";
         newCard.doneDate = getDoneDateFromContent(newCard.content) || "";
+        newCard.isUrgent = isUrgentFromContent(newCard.content);
         return newCard;
       })
       .toSorted((a, b) => {
@@ -322,6 +327,7 @@ function App() {
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
     newCard.doneDate = getDoneDateFromContent(newCard.content) || "";
+    newCard.isUrgent = isUrgentFromContent(newCard.content);
     newCards[newCardIndex] = newCard;
     setCards(newCards);
     const localTagOptions = cardTagOptions.filter((tag) => !tagsOptions().some(remoteTag => remoteTag.name === tag.name))
@@ -529,13 +535,14 @@ function App() {
     });
   }
 
-  // Done cards are moved to "<board>/.done/<lane>", and back to the board when undone
+  // Done cards are moved to "<board>/.done/<lane>", and back to the board when undone.
+  // Marking a card done also clears its urgent marker.
   async function toggleCardsDone(cardsToMove) {
     const newBoard = isDoneView() ? parentBoard() : `${board()}/.done`;
     const movePromises = cardsToMove.map((card) => {
       const newContent = isDoneView()
         ? removeDoneFromContent(card.content)
-        : setDoneInContent(card.content, new Date());
+        : setDoneInContent(removeUrgentFromContent(card.content), new Date());
       return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
         method: "PATCH",
         mode: "cors",
@@ -555,9 +562,37 @@ function App() {
   // Used by the editor, which passes its latest content since edits are saved with a delay
   async function toggleSelectedCardDone(content) {
     const card = selectedCard();
-    debounceChangeCardContent.clear();
+    // The passed content supersedes any pending edit, which would be saved to the old path
+    pendingContentChange = null;
+    debouncedFlushCardContentChange.clear();
     navigate(`${basePath()}${board()}` || "/");
     await toggleCardsDone([{ ...card, content }]);
+  }
+
+  async function setCardsUrgent(cardsToUpdate, isUrgent) {
+    const updatedContents = new Map();
+    const updatePromises = cardsToUpdate
+      .filter((card) => !!card.isUrgent !== isUrgent)
+      .map((card) => {
+        const newContent = isUrgent
+          ? setUrgentInContent(card.content)
+          : removeUrgentFromContent(card.content);
+        updatedContents.set(getCardKey(card), newContent);
+        return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
+          method: "PATCH",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: newContent }),
+        });
+      });
+    await Promise.all(updatePromises);
+    setCards(
+      cards().map((card) =>
+        updatedContents.has(getCardKey(card))
+          ? { ...card, content: updatedContents.get(getCardKey(card)), isUrgent }
+          : card
+      )
+    );
   }
 
   function sortCardsByCreatedFirst() {
@@ -647,6 +682,14 @@ function App() {
     );
     await toggleCardsDone(cardsToMove);
     clearSelection(); // Clear since cards were moved out of this view
+  }
+
+  async function bulkSetUrgent(isUrgent) {
+    const cardsToUpdate = cards().filter((card) =>
+      selectedCards().has(getCardKey(card))
+    );
+    await setCardsUrgent(cardsToUpdate, isUrgent);
+    // Keep selection to allow chaining operations
   }
 
   async function bulkAddTags(tagName) {
@@ -848,7 +891,18 @@ function App() {
             ?.map((tag) => tag.name?.toLowerCase())
             .includes(filteredTag().toLowerCase())
       )
+      .filter((card) => !urgentFilterActive() || card.isUrgent)
   );
+
+  const urgentFilterActive = createMemo(() => urgentOnly() && !isDoneView());
+
+  const urgentCount = createMemo(() => cards().filter((card) => card.isUrgent).length);
+
+  // When filtering by urgent, lanes without urgent cards are hidden. They stay
+  // rendered so lane indexes (drag and drop, keyboard navigation) are unchanged.
+  function isLaneHidden(lane) {
+    return urgentFilterActive() && getCardsFromLane(lane).length === 0;
+  }
 
   function getCardsFromLane(lane) {
     return filteredCards().filter((card) => card.lane === lane);
@@ -1257,6 +1311,16 @@ function App() {
         }
         break;
 
+      case 'u': // Toggle urgent
+        e.preventDefault();
+        if (focusedCardId() && !isDoneView()) {
+          const card = cards().find(c => c.name === focusedCardId());
+          if (card) {
+            setCardsUrgent([card], !card.isUrgent);
+          }
+        }
+        break;
+
       case 'd': // Delete card (with confirmation)
         e.preventDefault();
         if (focusedCardId()) {
@@ -1325,6 +1389,9 @@ function App() {
         selectionMode={selectionMode()}
         onSelectionModeChange={setSelectionMode}
         isDoneView={isDoneView()}
+        urgentOnly={urgentOnly()}
+        urgentCount={urgentCount()}
+        onUrgentOnlyChange={setUrgentOnly}
         doneViewToggleHref={`${basePath()}${parentBoard()}${isDoneView() ? "" : "/.done"}/`}
         t={t}
         locale={locale()}
@@ -1338,6 +1405,7 @@ function App() {
           onRemoveTags={bulkRemoveTags}
           onSetDueDate={bulkSetDueDate}
           onToggleDone={bulkToggleDone}
+          onSetUrgent={bulkSetUrgent}
           isDoneView={isDoneView()}
           onClearSelection={clearSelection}
           tagsOptions={tagsOptions().map((option) => option.name)}
@@ -1351,7 +1419,7 @@ function App() {
           <For each={lanes()}>
             {(lane, index) => (
               <div
-                class="lane"
+                class={`lane ${isLaneHidden(lane) ? "lane--hidden" : ""}`}
                 id={`lane-${lane}`}
                 tabIndex={0}
                 onFocus={() => {
@@ -1402,6 +1470,7 @@ function App() {
                         tags={card.tags}
                         dueDate={card.dueDate}
                         doneDate={card.doneDate}
+                        isUrgent={card.isUrgent && !isDoneView()}
                         content={card.content}
                         disableDrag={disableCardsDrag()}
                         t={t}
@@ -1465,6 +1534,8 @@ function App() {
                               onRenameBtnClick={() => startRenamingCard(card)}
                               onDelete={() => deleteCard(card)}
                               onToggleDone={() => toggleCardsDone([card])}
+                              isUrgent={card.isUrgent}
+                              onToggleUrgent={() => setCardsUrgent([card], !card.isUrgent)}
                               isDoneView={isDoneView()}
                               onClick={() =>
                                 navigate(
