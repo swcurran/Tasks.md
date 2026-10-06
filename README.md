@@ -15,6 +15,7 @@ A self-hosted, Markdown file based task management board.
 - Multilingual support, with locale auto-detected from browser and persisted per user;
 - Mark cards as done to move them out of the board, and browse them in a separate done view;
 - Mark cards as urgent to highlight them, and filter the board to show only urgent cards;
+- Click a card to select it for keyboard shortcuts, and double click it to open it (on touch screens a tap opens it);
 
 ## Upgrade from 2.X.X to 3.X.X
 If you're running a docker container with version 2 of Tasks.md and want to upgrade it to version 3, please follow up [those instructions](/migration-guide.md) as it requires some tweeks for it to work properly.

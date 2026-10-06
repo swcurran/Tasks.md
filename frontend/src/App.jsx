@@ -1067,6 +1067,27 @@ function App() {
     }
   })
 
+  // The card is re-rendered when its content changes, so focus is restored afterwards.
+  // When filtering by urgent the card may disappear, then a neighbour gets the focus.
+  async function toggleFocusedCardUrgent(card) {
+    const laneCards = getCardsFromLane(card.lane);
+    const indexInLane = laneCards.findIndex((c) => c.name === card.name);
+    await setCardsUrgent([card], !card.isUrgent);
+    setTimeout(() => {
+      const visibleLaneCards = getCardsFromLane(card.lane);
+      const cardToFocus = visibleLaneCards.some((c) => c.name === card.name)
+        ? card
+        : visibleLaneCards[Math.min(indexInLane, visibleLaneCards.length - 1)];
+      if (!cardToFocus) {
+        setFocusedCardId(null);
+        mainContainerRef?.focus();
+        return;
+      }
+      setFocusedCardId(cardToFocus.name);
+      document.getElementById(`card-${cardToFocus.name}`)?.focus();
+    }, 50);
+  }
+
   function handleMainBoardKeyDown(e) {
     // Don't interfere with input fields
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
@@ -1316,7 +1337,7 @@ function App() {
         if (focusedCardId() && !isDoneView()) {
           const card = cards().find(c => c.name === focusedCardId());
           if (card) {
-            setCardsUrgent([card], !card.isUrgent);
+            toggleFocusedCardUrgent(card);
           }
         }
         break;

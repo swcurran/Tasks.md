@@ -72,9 +72,28 @@ export function Card(props) {
         if (props.selectionMode && props.onSelectionChange) {
           e.stopPropagation();
           props.onSelectionChange(!props.isSelected);
-        } else {
-          props.onClick();
+          return;
         }
+        // With a mouse a click only focuses the card, and a double click opens it.
+        // Double tapping is awkward, so a tap opens the card.
+        const isTouch = e.pointerType
+          ? e.pointerType === "touch"
+          : window.matchMedia("(pointer: coarse)").matches;
+        if (isTouch) {
+          props.onClick();
+          return;
+        }
+        // Drag and drop prevents the default focus on mouse down
+        if (!e.target.closest("button, input")) {
+          e.currentTarget.focus();
+        }
+      }}
+      onDblClick={e => {
+        // Ignore double clicks on the card's own controls, e.g. the rename input
+        if (props.selectionMode || e.target.closest("button, input")) {
+          return;
+        }
+        props.onClick();
       }}
       tabIndex="0"
     >
