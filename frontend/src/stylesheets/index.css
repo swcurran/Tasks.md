@@ -458,6 +458,24 @@ dialog:not(.dialog--maximized) {
   padding: 0 12px;
 }
 
+/* On narrow screens the toolbar buttons go on their own row above the card
+   name, so the name isn't squeezed into a narrow column */
+@media (max-width: 600px) {
+  .dialog__toolbar {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .dialog__toolbar-btns {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .dialog__tags-and-due-date {
+    flex-wrap: wrap;
+  }
+}
+
 .dialog__tags-and-due-date {
   display: flex;
   justify-content: space-between;
