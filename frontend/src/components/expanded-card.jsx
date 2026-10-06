@@ -170,6 +170,16 @@ function ExpandedCard(props) {
   }, 0);
   }
 
+  // Push any unsaved editor content before closing. Change detection relies on
+  // DOM events, which can miss edits (e.g. a paste with no following keypress).
+  function closeDialog() {
+    const content = editor()?.content;
+    if (content !== undefined && content !== props.content) {
+      props.onContentChange(content);
+    }
+    props.onClose();
+  }
+
   function getButtonCoordinates(event) {
     event.stopPropagation();
     const dialogCoordinates = dialogRef.getBoundingClientRect();
@@ -313,7 +323,7 @@ function ExpandedCard(props) {
       setIsCreatingNewTag(false);
       return;
     }
-    props.onClose();
+    closeDialog();
   }
 
   function handleBackdropClick(e) {
@@ -401,7 +411,7 @@ function ExpandedCard(props) {
                 <button
                   type="button"
                   class="dialog__toolbar-btn"
-                  onClick={props.onClose}
+                  onClick={closeDialog}
                   title={props.t()('common.close')}
                 >
                   <span innerHTML={IconClear} />
@@ -472,6 +482,10 @@ function ExpandedCard(props) {
                 }}
                 onKeyDown={handleEditorOnChange}
                 onClick={handleEditorOnChange}
+                onPaste={handleEditorOnChange}
+                onCut={handleEditorOnChange}
+                onDrop={handleEditorOnChange}
+                onInput={handleEditorOnChange}
               />
             </div>
           </div>
