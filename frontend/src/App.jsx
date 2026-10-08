@@ -3,6 +3,7 @@ import {
   For,
   Show,
   onMount,
+  onCleanup,
   createMemo,
   createEffect,
   createResource,
@@ -143,7 +144,10 @@ function App() {
     return backgroundColor;
   }
 
+  let lastFetchTime = 0;
+
   async function fetchData() {
+    lastFetchTime = Date.now();
     const resourcesReq = fetch(`${api}/resource${board()}`, {
       method: "GET",
       mode: "cors",
@@ -921,6 +925,58 @@ function App() {
     fetchData();
   });
 
+  // Reload the board when coming back to the tab, so changes made on another
+  // device show up without a full page refresh. Reloading re-renders the cards
+  // (and the editor), so it waits while a card is being edited or renamed.
+  const [refreshPending, setRefreshPending] = createSignal(false);
+  const isBoardBusy = createMemo(
+    () =>
+      !!selectedCard() ||
+      !!cardBeingRenamed() ||
+      laneBeingRenamedName() !== null ||
+      newLaneName() !== null
+  );
+
+  async function refreshBoard() {
+    if (isBoardBusy()) {
+      setRefreshPending(true);
+      return;
+    }
+    setRefreshPending(false);
+    const focusedId = document.activeElement?.id;
+    await fetchData();
+    if (focusedId?.startsWith("card-")) {
+      setTimeout(() => document.getElementById(focusedId)?.focus(), 50);
+    }
+  }
+
+  function handleReturnToTab() {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    // Switching tabs fires both visibilitychange and focus, and a quick
+    // glance away and back doesn't need a reload (Shift+R forces one)
+    if (Date.now() - lastFetchTime < 10000) {
+      return;
+    }
+    refreshBoard();
+  }
+
+  onMount(() => {
+    document.addEventListener("visibilitychange", handleReturnToTab);
+    window.addEventListener("focus", handleReturnToTab);
+    onCleanup(() => {
+      document.removeEventListener("visibilitychange", handleReturnToTab);
+      window.removeEventListener("focus", handleReturnToTab);
+    });
+  });
+
+  createEffect(() => {
+    if (refreshPending() && !isBoardBusy()) {
+      refreshBoard();
+    }
+  });
+
   createEffect(() => {
     if (title()) {
       document.title = title();
@@ -1102,7 +1158,7 @@ function App() {
     const visibleCards = filteredCards();
 
     // Allow certain keys to work even when there are no cards
-    const allowedKeysWithoutCards = ['n', '?', 'Escape'];
+    const allowedKeysWithoutCards = ['n', 'R', '?', 'Escape'];
     if (!visibleCards.length && !allowedKeysWithoutCards.includes(e.key)) {
       return;
     }
@@ -1330,6 +1386,11 @@ function App() {
             startRenamingCard(card);
           }
         }
+        break;
+
+      case 'R': // Reload the board from the server
+        e.preventDefault();
+        refreshBoard();
         break;
 
       case 'u': // Toggle urgent

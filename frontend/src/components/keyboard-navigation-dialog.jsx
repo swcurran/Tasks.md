@@ -125,6 +125,12 @@ export function KeyboardNavigationDialog(props) {
                       </td>
                     </tr>
                     <tr>
+                      <td class="help-dialog__key-cell">Shift+R</td>
+                      <td class="help-dialog__desc-cell">
+                        Reload the board (pick up changes from other devices)
+                      </td>
+                    </tr>
+                    <tr>
                       <td class="help-dialog__key-cell">?</td>
                       <td class="help-dialog__desc-cell">
                         Show this help dialog
