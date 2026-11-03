@@ -37,5 +37,11 @@ export default {
 		mustHaveName: "Name is required", hiddenByDot: "Hidden by dot", duplicateName: "Duplicate name",
 		forbiddenChars: "Forbidden characters", noMdExtension: "No .md extension", prohibitedName: "Prohibited name",
 	},
+	version: {
+		title: "Version", thisPage: "This page", server: "Server", serverStarted: "Server started",
+		checking: "Checking…", unknown: "Unknown",
+		upToDate: "Up to date: this page is the build the server is serving.",
+		outOfDate: "Out of date: this tab is running an older build. Reload the page (Shift-click the reload button) before making changes.",
+	},
 	keyboard: { title: "Keyboard Shortcuts", sections: { navigation: "Navigation", cardActions: "Card actions", general: "General" }, shortcuts: {} },
 }

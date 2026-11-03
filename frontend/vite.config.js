@@ -2,11 +2,48 @@ import { defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 import { VitePWA } from 'vite-plugin-pwa';
 import generalAssets from "./plugins/general-assets";
+import { execSync } from "node:child_process";
+
+// Identifies this build. It's compiled into the page and written to
+// version.json, which the server reports, so the help dialog can tell whether
+// a tab is running the build the server currently serves.
+function getGitCommit() {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
+const buildInfo = {
+  builtAt: new Date().toISOString(),
+  commit: process.env.GIT_COMMIT || getGitCommit() || null,
+};
+
+function buildInfoFile() {
+  return {
+    name: "build-info",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: JSON.stringify(buildInfo),
+      });
+    },
+  };
+}
 
 export default defineConfig({
+  define: {
+    __BUILD_INFO__: JSON.stringify(buildInfo),
+  },
   plugins: [
     solidPlugin(),
     generalAssets(),
+    buildInfoFile(),
     VitePWA({
       registerType: "autoUpdate",
       workbox: {

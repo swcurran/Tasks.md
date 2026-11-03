@@ -1,10 +1,29 @@
 import { Portal } from "solid-js/web";
+import { createResource, Show } from "solid-js";
 import { IconClear } from "@stackoverflow/stacks-icons/icons";
+import { api } from "../api";
+
+// Build of the page running in this tab (set at build time in vite.config.js)
+const pageBuild = __BUILD_INFO__;
+
+function formatBuild(build) {
+  const date = new Date(build.builtAt).toLocaleString();
+  return build.commit ? `${build.commit}, ${date}` : date;
+}
 
 export function KeyboardNavigationDialog(props) {
+  const [serverVersion] = createResource(() =>
+    fetch(`${api}/version`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+  );
+  const serverBuild = () => serverVersion()?.frontendBuild;
+  const isOutOfDate = () =>
+    !!serverBuild() && serverBuild().builtAt !== pageBuild.builtAt;
+
   return (
     <Portal>
-      <div class="dialog-backdrop" onClick={() => setShowHelpDialog(false)}>
+      <div class="dialog-backdrop" onClick={() => props.onClose()}>
         <dialog open class="help-dialog" onClick={(e) => e.stopPropagation()}>
           <div class="dialog__body help-dialog__body">
             <div class="help-dialog__header">
@@ -138,6 +157,49 @@ export function KeyboardNavigationDialog(props) {
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <div class="help-dialog__section">
+                <h3 class="help-dialog__section-title">{props.t()('version.title')}</h3>
+                <table class="help-dialog__table">
+                  <tbody>
+                    <tr>
+                      <td class="help-dialog__key-cell">{props.t()('version.thisPage')}</td>
+                      <td class="help-dialog__desc-cell">{formatBuild(pageBuild)}</td>
+                    </tr>
+                    <tr>
+                      <td class="help-dialog__key-cell">{props.t()('version.server')}</td>
+                      <td class="help-dialog__desc-cell">
+                        <Show
+                          when={!serverVersion.loading}
+                          fallback={props.t()('version.checking')}
+                        >
+                          {serverBuild()
+                            ? formatBuild(serverBuild())
+                            : props.t()('version.unknown')}
+                        </Show>
+                      </td>
+                    </tr>
+                    <Show when={serverVersion()?.serverStartedAt}>
+                      <tr>
+                        <td class="help-dialog__key-cell">{props.t()('version.serverStarted')}</td>
+                        <td class="help-dialog__desc-cell">
+                          {new Date(serverVersion().serverStartedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    </Show>
+                  </tbody>
+                </table>
+                <Show when={!serverVersion.loading && serverBuild()}>
+                  <p
+                    class={`help-dialog__version-status ${isOutOfDate() ? "help-dialog__version-status--out-of-date" : ""}`}
+                    role="status"
+                  >
+                    {isOutOfDate()
+                      ? props.t()('version.outOfDate')
+                      : props.t()('version.upToDate')}
+                  </p>
+                </Show>
               </div>
             </div>
           </div>

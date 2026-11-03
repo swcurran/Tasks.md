@@ -1279,6 +1279,12 @@ function App() {
       return;
     }
 
+    // Leave Cmd/Ctrl combinations to the browser (e.g. Cmd+Shift+R to hard
+    // reload, Ctrl+F to find); no shortcut uses them
+    if (e.metaKey || e.ctrlKey) {
+      return;
+    }
+
     const visibleCards = filteredCards();
 
     // Allow certain keys to work even when there are no cards

@@ -582,6 +582,20 @@ dialog.help-dialog {
   color: var(--color-foreground);
 }
 
+.help-dialog__version-status {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--color-foreground);
+}
+
+/* Uses the urgent colors so themes that restyle urgent cards match */
+.help-dialog__version-status--out-of-date {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--color-urgent-background, var(--color-alt-1));
+  color: var(--color-urgent-foreground, #fff);
+}
+
 .help-dialog__footer {
   text-align: center;
   margin-top: 12px;

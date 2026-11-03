@@ -100,6 +100,24 @@ async function updateTagBackgroundColor(ctx) {
 
 router.patch("/tags/:path*", updateTagBackgroundColor);
 
+const SERVER_STARTED_AT = new Date().toISOString();
+
+// Which frontend build the server is serving (written by the frontend build
+// next to the page) and when the server started
+async function getVersion(ctx) {
+  const frontendBuild = await fs.promises
+    .readFile("static/version.json", "utf8")
+    .then((content) => JSON.parse(content))
+    .catch(() => null);
+  ctx.set("Cache-Control", "no-store");
+  ctx.body = {
+    frontendBuild,
+    serverStartedAt: SERVER_STARTED_AT,
+  };
+}
+
+router.get("/version", getVersion);
+
 async function getTitle(ctx) {
   ctx.body = TITLE;
 }
@@ -396,10 +414,22 @@ app.use(mount((`${BASE_PATH || '/'}`), (ctx, next) => {
   else if (/assets\/(.*).(js|css)$/.test(ctx.request.url)) {
     const fileName = ctx.request.url.split('/').at(-1);
     ctx.request.url = `/assets/${fileName}`
+    // Built assets have a content hash in their name, so a given URL never
+    // changes; a missing one (e.g. from an old page) keeps the default headers
+    return middleware(ctx, next).then(() => {
+      if (ctx.status === 200) {
+        ctx.set('Cache-Control', 'public, max-age=31536000, immutable')
+      }
+    })
   }
   // default to index.html
   else {
     ctx.request.url = '/'
+  }
+  if (ctx.request.url === '/' || ctx.request.url === '/index.html') {
+    // Never keep a copy of the page itself: browsers restoring tabs (e.g. on
+    // restart) would otherwise run an old build, which points to old assets
+    ctx.set('Cache-Control', 'no-store')
   }
   return middleware(ctx, next)
 }));

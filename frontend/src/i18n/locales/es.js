@@ -38,5 +38,11 @@ export default {
 		mustHaveName: "El nombre es obligatorio", hiddenByDot: "Oculto por punto", duplicateName: "Nombre duplicado",
 		forbiddenChars: "Caracteres prohibidos", noMdExtension: "Sin extensión .md", prohibitedName: "Nombre prohibido",
 	},
+	version: {
+		title: "Versión", thisPage: "Esta página", server: "Servidor", serverStarted: "Servidor iniciado",
+		checking: "Comprobando…", unknown: "Desconocida",
+		upToDate: "Actualizada: esta página es la versión que sirve el servidor.",
+		outOfDate: "Desactualizada: esta pestaña ejecuta una versión anterior. Recarga la página (Mayús + clic en recargar) antes de hacer cambios.",
+	},
 	keyboard: { title: "Atajos de teclado", sections: { navigation: "Navegación", cardActions: "Acciones de tarjeta", general: "General" }, shortcuts: {} },
 }
