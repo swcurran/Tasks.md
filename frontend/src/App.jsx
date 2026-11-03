@@ -244,9 +244,15 @@ function App() {
     laneOrderChanged = false,
     removedLanes = [],
   } = {}) {
-    const remoteSort = await fetch(`${api}/sort${board()}`, { method: "GET" })
-      .then((res) => res.json())
-      .catch(() => ({}));
+    // If the saved order can't be read, don't save over it
+    const remoteSort = await fetch(`${api}/sort${board()}`, {
+      method: "GET",
+    }).then((res) => {
+      if (!res.ok) {
+        throw new Error(`Couldn't read the saved order (${res.status})`);
+      }
+      return res.json();
+    });
     const localLanes = lanes();
     const laneOrder = laneOrderChanged
       ? localLanes
