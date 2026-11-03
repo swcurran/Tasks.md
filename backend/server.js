@@ -145,14 +145,32 @@ async function updateResource(ctx) {
     /<>:"\/\\\|\?\*#/g,
     " "
   );
+  const newContent = ctx.request.body.content;
+
+  // Optional optimistic concurrency check: when the client says which version
+  // of the card its content is based on, refuse to overwrite a newer version
+  // (e.g. one saved from another tab or device)
+  const expectedLastUpdated = ctx.request.body.expectedLastUpdated;
+  if (expectedLastUpdated && newContent !== undefined) {
+    const currentStats = await fs.promises
+      .stat(`${TASKS_DIR}/${oldPath}`)
+      .catch(() => null);
+    if (
+      currentStats?.isFile() &&
+      currentStats.mtime.getTime() !== new Date(expectedLastUpdated).getTime()
+    ) {
+      ctx.status = 409;
+      ctx.body = { lastUpdated: currentStats.mtime };
+      return;
+    }
+  }
+
   if (newPath !== oldPath) {
     await fs.promises.rename(
       `${TASKS_DIR}/${oldPath}`,
       `${TASKS_DIR}/${newPath}`
     );
   }
-
-  const newContent = ctx.request.body.content;
 
   const isFile = fs.lstatSync(`${TASKS_DIR}/${newPath}`).isFile();
   if (isFile && newContent !== undefined) {
@@ -163,6 +181,13 @@ async function updateResource(ctx) {
   }
   if (PUID && PGID) {
     await fs.promises.chown(`${TASKS_DIR}/${newPath}`, PUID, PGID);
+  }
+  if (isFile) {
+    // Return the new version so the client can base its next save on it
+    const stats = await fs.promises.stat(`${TASKS_DIR}/${newPath}`);
+    ctx.status = 200;
+    ctx.body = { lastUpdated: stats.mtime };
+    return;
   }
   ctx.status = 204;
 }

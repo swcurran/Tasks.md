@@ -155,13 +155,21 @@ function App() {
 
     const lanesFromApi = resources.map((resource) => resource.name);
     const lanesSortedKeys = Object.keys(manualSort);
+    // Lanes missing from the saved order go last, where new lanes are created
     const newLanes = lanesFromApi.toSorted(
-      (a, b) => lanesSortedKeys.indexOf(a) - lanesSortedKeys.indexOf(b)
+      (a, b) =>
+        getManualSortIndex(lanesSortedKeys, a, Number.MAX_SAFE_INTEGER) -
+        getManualSortIndex(lanesSortedKeys, b, Number.MAX_SAFE_INTEGER)
     );
 
     let newCards = resources
       .map((resource) =>
-        resource.files.map((file) => ({ ...file, lane: resource.name }))
+        resource.files.map((file) => ({
+          ...file,
+          lane: resource.name,
+          // Version of the file on the server, sent back when saving content
+          serverLastUpdated: file.lastUpdated,
+        }))
       )
       .flat();
 
@@ -200,16 +208,97 @@ function App() {
           : "";
         return newCard;
       })
-      .toSorted((a, b) => {
-        const indexOfA = manualSort[a.lane]?.indexOf(a.name) || -1;
-        const indexOfB = manualSort[b.lane]?.indexOf(b.name) || -1;
-        return indexOfA - indexOfB;
-      });
+      // Cards missing from the saved order go first, where new cards are created
+      .toSorted(
+        (a, b) =>
+          getManualSortIndex(manualSort[a.lane], a.name, -1) -
+          getManualSortIndex(manualSort[b.lane], b.name, -1)
+      );
     batch(() => {
       setLanes(newLanes);
       setCards(newCards);
       setRenderUID(v7());
     });
+  }
+
+  function getManualSortIndex(sortedNames, name, indexIfMissing) {
+    const index = sortedNames?.indexOf(name) ?? -1;
+    return index === -1 ? indexIfMissing : index;
+  }
+
+  // Saves the manual order of lanes and cards after an explicit change. It only
+  // sends this tab's view of what changed; everything else keeps the order
+  // currently on the server, so a tab with stale data can't overwrite the
+  // order of lanes and cards it didn't touch. Saves run one at a time so each
+  // one reads the order the previous one wrote.
+  let manualSortSaveQueue = Promise.resolve();
+  function saveManualSort(changes) {
+    manualSortSaveQueue = manualSortSaveQueue
+      .then(() => writeManualSort(changes))
+      .catch((err) => console.error(err));
+    return manualSortSaveQueue;
+  }
+
+  async function writeManualSort({
+    changedLanes = [],
+    laneOrderChanged = false,
+    removedLanes = [],
+  } = {}) {
+    const remoteSort = await fetch(`${api}/sort${board()}`, { method: "GET" })
+      .then((res) => res.json())
+      .catch(() => ({}));
+    const localLanes = lanes();
+    const laneOrder = laneOrderChanged
+      ? localLanes
+      : [
+          ...Object.keys(remoteSort).filter((lane) => localLanes.includes(lane)),
+          ...localLanes.filter((lane) => !(lane in remoteSort)),
+        ];
+    const newSort = {};
+    for (const lane of laneOrder) {
+      newSort[lane] =
+        changedLanes.includes(lane) || !remoteSort[lane]
+          ? cards()
+              .filter((card) => card.lane === lane)
+              .map((card) => card.name)
+          : remoteSort[lane];
+    }
+    // Keep lanes this tab doesn't know about (e.g. created on another device)
+    for (const [lane, cardNames] of Object.entries(remoteSort)) {
+      if (!(lane in newSort) && !removedLanes.includes(lane)) {
+        newSort[lane] = cardNames;
+      }
+    }
+    await fetch(`${api}/sort${board()}`, {
+      method: "PUT",
+      body: JSON.stringify(newSort),
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
+  // Saves card content, refusing to overwrite a newer version saved elsewhere.
+  // Returns { ok: true, lastUpdated } or { ok: false } on a conflict.
+  async function saveCardContent(card, newContent, { force = false } = {}) {
+    const res = await fetch(
+      `${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`,
+      {
+        method: "PATCH",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newContent,
+          expectedLastUpdated: force ? undefined : card.serverLastUpdated,
+        }),
+      }
+    );
+    if (res.status === 409) {
+      return { ok: false };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { ok: true, lastUpdated: body.lastUpdated };
   }
 
   function pickTagColorIndexBasedOnHash(value) {
@@ -222,10 +311,21 @@ function App() {
     return colorIndex;
   }
 
-  const debounceChangeCardContent = debounce(
-    (newContent) => changeCardContent(newContent),
-    250
-  );
+  // Editor saves run one at a time, so each is based on the version of the card
+  // returned by the previous save. Reloading after a conflict bumps the
+  // generation, which drops saves queued from the discarded editor content.
+  let cardContentSaveQueue = Promise.resolve();
+  let cardContentSaveGeneration = 0;
+  const debounceChangeCardContent = debounce((newContent) => {
+    const generation = cardContentSaveGeneration;
+    cardContentSaveQueue = cardContentSaveQueue
+      .then(() => {
+        if (generation === cardContentSaveGeneration) {
+          return changeCardContent(newContent);
+        }
+      })
+      .catch((err) => console.error(err));
+  }, 250);
 
   function updateTagColors(mapTagToColor) {
     return fetch(`${api}/tags${board()}`, {
@@ -249,15 +349,18 @@ function App() {
     );
     const newCard = newCards[newCardIndex];
     newCard.content = newContent;
-    await fetch(
-      `${api}/resource${board()}/${encodeURIComponent(newCard.lane)}/${encodeURIComponent(newCard.name)}.md`,
-      {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
+    let saveResult = await saveCardContent(newCard, newContent);
+    if (!saveResult.ok) {
+      // The card was changed elsewhere since this tab loaded it
+      if (!confirm(t()("conflict.cardChanged"))) {
+        cardContentSaveGeneration++;
+        debounceChangeCardContent.clear();
+        // Reloading also re-renders the editor with the newer content
+        await fetchData();
+        return;
       }
-    );
+      saveResult = await saveCardContent(newCard, newContent, { force: true });
+    }
     const remoteTagOptions = await fetch(`${api}/tags${board()}`, {
       method: "GET",
       mode: "cors",
@@ -287,7 +390,8 @@ function App() {
       };
     });
     newCard.tags = cardTagOptions;
-    newCard.lastUpdated = new Date().toISOString();
+    newCard.lastUpdated = saveResult.lastUpdated || new Date().toISOString();
+    newCard.serverLastUpdated = saveResult.lastUpdated;
     const dueDateStringMatch = newCard.content.match(/\[due:(.*?)\]/);
     newCard.dueDate = dueDateStringMatch?.length ? dueDateStringMatch[1] : "";
     newCards[newCardIndex] = newCard;
@@ -335,6 +439,7 @@ function App() {
     newCard.createdAt = new Date().toISOString();
     newCards.unshift(newCard);
     setCards(newCards);
+    saveManualSort({ changedLanes: [lane] });
     startRenamingCard(cards()[0]);
   }
 
@@ -404,6 +509,7 @@ function App() {
     });
     newLanes.push(newName);
     setLanes(newLanes);
+    saveManualSort({ changedLanes: [newName], laneOrderChanged: true });
     setNewLaneName(newName);
     setLaneBeingRenamedName(newName);
   }
@@ -427,6 +533,11 @@ function App() {
     setCards(newCards);
     newLanes[newLaneIndex] = newLaneName();
     setLanes(newLanes);
+    saveManualSort({
+      changedLanes: [newLaneName()],
+      laneOrderChanged: true,
+      removedLanes: [newLane],
+    });
     setNewLaneName(null);
     setLaneBeingRenamedName(null);
   }
@@ -579,16 +690,13 @@ function App() {
 
       const newContent = addTagToContent(content, tagName);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
-      });
+      const saveResult = await saveCardContent(card, newContent);
+      return saveResult.ok ? null : card.name;
     });
 
-    await Promise.all(updatePromises);
+    const conflictedCardNames = (await Promise.all(updatePromises)).filter(Boolean);
     await fetchData();
+    alertCardsNotUpdated(conflictedCardNames);
     // Keep selection to allow chaining operations
   }
 
@@ -609,16 +717,13 @@ function App() {
 
       const newContent = removeTagFromContent(content, tagName);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
-      });
+      const saveResult = await saveCardContent(card, newContent);
+      return saveResult.ok ? null : card.name;
     });
 
-    await Promise.all(updatePromises);
+    const conflictedCardNames = (await Promise.all(updatePromises)).filter(Boolean);
     await fetchData();
+    alertCardsNotUpdated(conflictedCardNames);
     // Keep selection to allow chaining operations
   }
 
@@ -632,17 +737,20 @@ function App() {
       const content = card.content || "";
       const newContent = setDueDateInContent(content, dueDate);
 
-      return fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(card.name)}.md`, {
-        method: "PATCH",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newContent }),
-      });
+      const saveResult = await saveCardContent(card, newContent);
+      return saveResult.ok ? null : card.name;
     });
 
-    await Promise.all(updatePromises);
+    const conflictedCardNames = (await Promise.all(updatePromises)).filter(Boolean);
     await fetchData();
+    alertCardsNotUpdated(conflictedCardNames);
     // Keep selection to allow chaining operations
+  }
+
+  function alertCardsNotUpdated(cardNames) {
+    if (cardNames.length) {
+      alert(`${t()("conflict.cardsNotUpdated")}\n\n${cardNames.join("\n")}`);
+    }
   }
 
   function renameCard(oldName, newName) {
@@ -661,6 +769,7 @@ function App() {
     newCard.name = newCardNameWithoutSpaces;
     newCards[newCardIndex] = newCard;
     setCards(newCards);
+    saveManualSort({ changedLanes: [newCard.lane] });
     setCardBeingRenamed(null);
     // Restore focus to the renamed card
     setTimeout(() => {
@@ -783,35 +892,6 @@ function App() {
     }
   });
 
-  createEffect(() => {
-    if (!lanes().length) {
-      return;
-    }
-    if (selectedCard()) {
-      return;
-    }
-    const newSortJson = lanes().reduce((prev, curr) => {
-      const laneCardNames = cards()
-        .filter((card) => card.lane === curr)
-        .map((card) => card.name);
-      return {
-        ...prev,
-        [curr]: laneCardNames,
-      };
-    }, {});
-    fetch(`${api}/sort${board()}`, {
-      method: "PUT",
-      body: JSON.stringify(newSortJson),
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-    });
-    if (disableCardsDrag()) {
-      return;
-    }
-  });
-
   function handleLanesSortChange(changedLane) {
     const lane = lanes().find(
       (lane) => lane === changedLane.id.slice("lane-".length)
@@ -825,6 +905,7 @@ function App() {
       ...newLanes.slice(changedLane.index),
     ];
     setLanes(updatedLanes);
+    saveManualSort({ laneOrderChanged: true });
 
     // If a lane was focused, keep focus on the moved lane by index
     const newIndex = updatedLanes.findIndex((l) => l === lane);
@@ -841,6 +922,7 @@ function App() {
     const oldIndex = cards().findIndex((card) => card.name === cardName);
     const card = cards()[oldIndex];
     const newCardLane = changedCard.to.slice("lane-content-".length);
+    const oldCardLane = card.lane;
     fetch(`${api}/resource${board()}/${encodeURIComponent(card.lane)}/${encodeURIComponent(cardName)}.md`, {
       method: "PATCH",
       mode: "cors",
@@ -864,6 +946,7 @@ function App() {
       return laneCards;
     });
     setCards(newCards);
+    saveManualSort({ changedLanes: [oldCardLane, newCardLane] });
 
     // Keep focus on the moved card so keyboard navigation works after
     // drag-and-drop and keyboard-based moves.
