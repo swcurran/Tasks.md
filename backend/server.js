@@ -26,14 +26,63 @@ const multerInstance = multer();
 
 const app = new Koa();
 
+// Reads a JSON config file (sort.json, tags.json). A missing or empty file is
+// treated as empty, but any other failure (such as a corrupt file) throws, so a
+// bad read is never mistaken for "no data" and then saved over the real data.
+async function readConfigJson(fileName) {
+  let raw;
+  try {
+    raw = await fs.promises.readFile(`${CONFIG_DIR}/${fileName}`, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return {};
+    }
+    throw err;
+  }
+  if (!raw.trim()) {
+    return {};
+  }
+  const data = JSON.parse(raw);
+  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+}
+
+// Writes a JSON config file atomically: the new content goes to a temporary
+// file that is then renamed over the old one, so a concurrent read sees either
+// the old or the new file, never a half-written one.
+async function writeConfigJson(fileName, data) {
+  const filePath = `${CONFIG_DIR}/${fileName}`;
+  const tempPath = `${filePath}.${uuid.v4()}.tmp`;
+  try {
+    await fs.promises.writeFile(tempPath, JSON.stringify(data));
+    if (PUID && PGID) {
+      await fs.promises.chown(tempPath, PUID, PGID);
+    }
+    await fs.promises.rename(tempPath, filePath);
+  } catch (err) {
+    await fs.promises.rm(tempPath, { force: true });
+    throw err;
+  }
+}
+
+// Read-modify-write updates of each config file run one at a time, so
+// concurrent requests can't drop each other's changes
+const configFileUpdateQueues = new Map();
+function updateConfigJson(fileName, update) {
+  const previousUpdate = configFileUpdateQueues.get(fileName) || Promise.resolve();
+  const nextUpdate = previousUpdate
+    .catch(() => {})
+    .then(async () => {
+      const data = await readConfigJson(fileName);
+      await writeConfigJson(fileName, update(data));
+    });
+  configFileUpdateQueues.set(fileName, nextUpdate);
+  return nextUpdate;
+}
+
 async function getTags(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/tags".length));
-  const tags = await fs.promises
-    .readFile(`${CONFIG_DIR}/tags.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => ({}));
-  const pathTags = JSON.stringify(tags[subPath]);
-  ctx.body = pathTags || {};
+  const tags = await readConfigJson("tags.json");
+  ctx.body = tags[subPath] || {};
   ctx.status = 200;
 }
 
@@ -41,16 +90,11 @@ router.get("/tags/:path*", getTags);
 
 async function updateTagBackgroundColor(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/tags".length));
-  const tags = await fs.promises
-    .readFile(`${CONFIG_DIR}/tags.json`)
-    .then((res) => JSON.parse(res.toString() || "{}"))
-    .catch((err) => ({}));
   const tagsColors = ctx.request.body;
-  const newTags = { ...tags, [subPath]: tagsColors };
-  await fs.promises.writeFile(
-    `${CONFIG_DIR}/tags.json`,
-    JSON.stringify(newTags)
-  );
+  await updateConfigJson("tags.json", (tags) => ({
+    ...tags,
+    [subPath]: tagsColors,
+  }));
   ctx.status = 204;
 }
 
@@ -191,6 +235,26 @@ async function updateResource(ctx) {
     /<>:"\/\\\|\?\*#/g,
     " "
   );
+  const newContent = ctx.request.body.content;
+
+  // Optional optimistic concurrency check: when the client says which version
+  // of the card its content is based on, refuse to overwrite a newer version
+  // (e.g. one saved from another tab or device)
+  const expectedLastUpdated = ctx.request.body.expectedLastUpdated;
+  if (expectedLastUpdated && newContent !== undefined) {
+    const currentStats = await fs.promises
+      .stat(`${TASKS_DIR}/${oldPath}`)
+      .catch(() => null);
+    if (
+      currentStats?.isFile() &&
+      currentStats.mtime.getTime() !== new Date(expectedLastUpdated).getTime()
+    ) {
+      ctx.status = 409;
+      ctx.body = { lastUpdated: currentStats.mtime };
+      return;
+    }
+  }
+
   if (newPath !== oldPath) {
     const isDirectory = fs.lstatSync(`${TASKS_DIR}/${oldPath}`).isDirectory();
     if (ctx.request.body.keepBoth) {
@@ -215,8 +279,6 @@ async function updateResource(ctx) {
     }
   }
 
-  const newContent = ctx.request.body.content;
-
   const isFile = fs.lstatSync(`${TASKS_DIR}/${newPath}`).isFile();
   if (isFile && newContent !== undefined) {
     await fs.promises.writeFile(
@@ -226,6 +288,13 @@ async function updateResource(ctx) {
   }
   if (PUID && PGID) {
     await fs.promises.chown(`${TASKS_DIR}/${newPath}`, PUID, PGID);
+  }
+  if (isFile) {
+    // Return the new version so the client can base its next save on it
+    const stats = await fs.promises.stat(`${TASKS_DIR}/${newPath}`);
+    ctx.status = 200;
+    ctx.body = { lastUpdated: stats.mtime };
+    return;
   }
   ctx.status = 204;
 }
@@ -269,19 +338,11 @@ router.post("/image", multerInstance.single("file"), uploadImage);
 
 async function updateSort(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/sort".length));
-  const newSort = { [subPath]: ctx.request.body || {} };
-  const currentSort = await fs.promises
-    .readFile(`${CONFIG_DIR}/sort.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => []);
-  const mergedSort = JSON.stringify({ ...(currentSort || {}), ...newSort });
-  await fs.promises.writeFile(
-    `${CONFIG_DIR}/sort.json`,
-    mergedSort
-  );
-  if (PUID && PGID) {
-    await fs.promises.chown(`${CONFIG_DIR}/sort.json`, PUID, PGID);
-  }
+  const boardSort = ctx.request.body || {};
+  await updateConfigJson("sort.json", (sort) => ({
+    ...sort,
+    [subPath]: boardSort,
+  }));
   ctx.status = 200;
 }
 
@@ -289,12 +350,8 @@ router.put("/sort/:path*", updateSort);
 
 async function getSort(ctx) {
   const subPath = decodeURIComponent(ctx.request.url.substring("/sort".length));
-  const sort = await fs.promises
-    .readFile(`${CONFIG_DIR}/sort.json`)
-    .then((res) => JSON.parse(res.toString()))
-    .catch((err) => []);
-  const pathSort = JSON.stringify(sort[subPath]);
-  ctx.body = pathSort || {};
+  const sort = await readConfigJson("sort.json");
+  ctx.body = sort[subPath] || {};
   ctx.status = 200;
 }
 

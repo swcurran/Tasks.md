@@ -30,6 +30,10 @@ export default {
 		deleteConfirm: "¿Eliminar seleccionadas?", deleteConfirm_plural: "¿Eliminar seleccionadas?",
 	},
 	doneView: { title: "Completadas" },
+	conflict: {
+		cardChanged: "Esta tarjeta se modificó en otra pestaña o dispositivo desde que la abriste.\n\nAceptar: conservar tu versión (sobrescribe los otros cambios)\nCancelar: descartar tu edición y cargar la otra versión",
+		cardsNotUpdated: "Estas tarjetas se modificaron en otra pestaña o dispositivo y no se actualizaron. El tablero se ha recargado, inténtalo de nuevo:",
+	},
 	validation: {
 		mustHaveName: "El nombre es obligatorio", hiddenByDot: "Oculto por punto", duplicateName: "Nombre duplicado",
 		forbiddenChars: "Caracteres prohibidos", noMdExtension: "Sin extensión .md", prohibitedName: "Nombre prohibido",

@@ -29,6 +29,10 @@ export default {
 		deleteConfirm: "Delete selected?", deleteConfirm_plural: "Delete selected?",
 	},
 	doneView: { title: "Done" },
+	conflict: {
+		cardChanged: "This card was changed on another tab or device since you opened it.\n\nOK: keep your version (overwrites the other changes)\nCancel: discard your edit and load the other version",
+		cardsNotUpdated: "These cards were changed on another tab or device and were not updated. The board has been reloaded, so try again:",
+	},
 	validation: {
 		mustHaveName: "Name is required", hiddenByDot: "Hidden by dot", duplicateName: "Duplicate name",
 		forbiddenChars: "Forbidden characters", noMdExtension: "No .md extension", prohibitedName: "Prohibited name",
