@@ -1631,7 +1631,12 @@ function App() {
           <For each={lanes()}>
             {(lane, index) => (
               <div
-                class={`lane ${isLaneHidden(lane) ? "lane--hidden" : ""}`}
+                class={`lane ${isLaneHidden(lane) ? "lane--hidden" : ""} ${
+                  getCardsFromLane(lane).length === 0 &&
+                  laneBeingRenamedName() !== lane
+                    ? "lane--empty"
+                    : ""
+                }`}
                 id={`lane-${lane}`}
                 tabIndex={0}
                 onFocus={() => {

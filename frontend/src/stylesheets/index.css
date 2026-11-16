@@ -989,6 +989,33 @@ a > * {
   display: none;
 }
 
+/* Empty lanes collapse to a thin vertical strip; adding a card ("+") makes the
+   lane non-empty, so it expands back to full width */
+.lane--empty .lane__header {
+  flex-direction: column;
+  justify-content: flex-start;
+  max-width: 32px;
+}
+
+.lane--empty .lane__header-name-and-count {
+  flex-direction: column-reverse;
+}
+
+.lane--empty .lane__header-name {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+
+.lane--empty .header-buttons {
+  flex-direction: column;
+  order: -1;
+}
+
+.lane--empty .lane__content {
+  width: 32px;
+  padding: 0;
+}
+
 /* Header menu for less used options */
 .app-header__more {
   position: relative;
